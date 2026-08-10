@@ -34,10 +34,10 @@ public class Worker(ILogger<Worker> logger) : BackgroundService
             cancellationToken: cancellationToken);
 
         await channel.QueueBindAsync(
-                queue: QueueName,
-                exchange: ExchangeName,
-                routingKey: string.Empty,
-                cancellationToken: cancellationToken);
+            queue: QueueName,
+            exchange: ExchangeName,
+            routingKey: string.Empty,
+            cancellationToken: cancellationToken);
 
         var consumer = new AsyncEventingBasicConsumer(channel);
 
@@ -61,7 +61,7 @@ public class Worker(ILogger<Worker> logger) : BackgroundService
                 await channel.BasicNackAsync(args.DeliveryTag, multiple: false, requeue: true, cancellationToken: cancellationToken);
             }
         };
-    
+
         await channel.BasicConsumeAsync(
             queue: QueueName,
             autoAck: false,

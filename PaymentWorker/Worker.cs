@@ -12,12 +12,26 @@ public class Worker(ILogger<Worker> logger) : BackgroundService
     private static string QueueName => "orders-payment";
     private static string ExchangeName => "orders-exchange";
 
+    private static string DeadLetterExchangeName => "orders-dead-letter-exchange";
+
+    private static string DeadLetterQueueName => "orders-dead-letter-queue";
+
+    private static string DeadLetterRoutingKey => "payment-dead";
+
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
         var factory = new ConnectionFactory { HostName = "localhost" };
 
         this.connection = await factory.CreateConnectionAsync(cancellationToken);
         this.channel = await this.connection.CreateChannelAsync(cancellationToken: cancellationToken);
+
+        await this.DeclareDeadLetterExchangeAndQueueAsync(channel, cancellationToken);
+
+        var arguments = new Dictionary<string, object?>
+        {
+            ["x-dead-letter-exchange"] = DeadLetterExchangeName,
+            ["x-dead-letter-routing-key"] = DeadLetterRoutingKey
+        };
 
         await this.channel.ExchangeDeclareAsync(
             exchange: ExchangeName,
@@ -31,13 +45,14 @@ public class Worker(ILogger<Worker> logger) : BackgroundService
             durable: true,
             exclusive: false,
             autoDelete: false,
+            arguments: arguments,
             cancellationToken: cancellationToken);
 
         await channel.QueueBindAsync(
-                queue: QueueName,
-                exchange: ExchangeName,
-                routingKey: string.Empty,
-                cancellationToken: cancellationToken);
+            queue: QueueName,
+            exchange: ExchangeName,
+            routingKey: string.Empty,
+            cancellationToken: cancellationToken);
 
         var consumer = new AsyncEventingBasicConsumer(channel);
 
@@ -53,12 +68,14 @@ public class Worker(ILogger<Worker> logger) : BackgroundService
 
                 await Task.Delay(1000, cancellationToken); // Simulate processing time
 
+                //throw new Exception("Simulated payment processing failure"); // Simulate a failure
                 await channel.BasicAckAsync(args.DeliveryTag, multiple: false, cancellationToken: cancellationToken);
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Error processing order: {Message}, requeing...", args.Body.ToString());
-                await channel.BasicNackAsync(args.DeliveryTag, multiple: false, requeue: true, cancellationToken: cancellationToken);
+                //logger.LogError(ex, "Error processing order: {Message}, requeing...", args.Body.ToString());
+                logger.LogError(ex, "Error processing order: {Message}, sending it to dead letter queue", args.Body.ToString());
+                await channel.BasicNackAsync(args.DeliveryTag, multiple: false, requeue: false, cancellationToken: cancellationToken);
             }
         };
 
@@ -85,5 +102,28 @@ public class Worker(ILogger<Worker> logger) : BackgroundService
         }
 
         await base.StopAsync(cancellationToken);
+    }
+
+    private async Task DeclareDeadLetterExchangeAndQueueAsync(IChannel channel, CancellationToken cancellationToken)
+    {
+        await channel.ExchangeDeclareAsync(
+            exchange: DeadLetterExchangeName,
+            type: ExchangeType.Direct,
+            durable: true,
+            autoDelete: false,
+            cancellationToken: cancellationToken);
+
+        await channel.QueueDeclareAsync(
+            queue: DeadLetterQueueName,
+            durable: true,
+            exclusive: false,
+            autoDelete: false,
+            cancellationToken: cancellationToken);
+
+        await channel.QueueBindAsync(
+            queue: DeadLetterQueueName,
+            exchange: DeadLetterExchangeName,
+            routingKey: DeadLetterRoutingKey,
+            cancellationToken: cancellationToken);
     }
 }
