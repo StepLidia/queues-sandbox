@@ -29,6 +29,7 @@ public class Worker(ILogger<Worker> logger) : BackgroundService
 
         var arguments = new Dictionary<string, object?>
         {
+            ["x-queue-type"] = "quorum",
             ["x-dead-letter-exchange"] = DeadLetterExchangeName,
             ["x-dead-letter-routing-key"] = DeadLetterRoutingKey
         };
@@ -58,6 +59,19 @@ public class Worker(ILogger<Worker> logger) : BackgroundService
 
         consumer.ReceivedAsync += async (sender, args) =>
         {
+            long deliveryCount = 0;
+
+            if (args.BasicProperties.Headers?.TryGetValue("x-delivery-count", out var value) == true)
+            {
+                deliveryCount = Convert.ToInt64(value);
+            }
+
+            logger.LogInformation(
+                "Delivery tag: {DeliveryTag}, Redelivered: {Redelivered}, DeliveryCount: {DeliveryCount}",
+                args.DeliveryTag,
+                args.Redelivered,
+                deliveryCount);
+
             try
             {
                 var message = Encoding.UTF8.GetString(args.Body.ToArray());
@@ -68,14 +82,15 @@ public class Worker(ILogger<Worker> logger) : BackgroundService
 
                 await Task.Delay(1000, cancellationToken); // Simulate processing time
 
-                //throw new Exception("Simulated payment processing failure"); // Simulate a failure
+                throw new Exception("Simulated payment processing failure"); // Simulate a failure
                 await channel.BasicAckAsync(args.DeliveryTag, multiple: false, cancellationToken: cancellationToken);
             }
             catch (Exception ex)
             {
-                //logger.LogError(ex, "Error processing order: {Message}, requeing...", args.Body.ToString());
-                logger.LogError(ex, "Error processing order: {Message}, sending it to dead letter queue", args.Body.ToString());
-                await channel.BasicNackAsync(args.DeliveryTag, multiple: false, requeue: false, cancellationToken: cancellationToken);
+                logger.LogError(ex, "Error processing message. DeliveryTag: {DeliveryTag}, requeing...", args.DeliveryTag);
+                //logger.LogError(ex, "Error processing message. DeliveryTag: {DeliveryTag}, sending it to dead letter queue", args.DeliveryTag);
+                //await channel.BasicNackAsync(args.DeliveryTag, multiple: false, requeue: true, cancellationToken: cancellationToken);
+                await channel.BasicRejectAsync(args.DeliveryTag, requeue: true, cancellationToken: cancellationToken);
             }
         };
 
