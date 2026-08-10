@@ -1,0 +1,13 @@
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+**/build/
+
+.git
+.github
+.gitignore
+.vs
+.vscode
+
+README.md
