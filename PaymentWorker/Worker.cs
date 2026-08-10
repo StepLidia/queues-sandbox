@@ -28,18 +28,28 @@ public class Worker(ILogger<Worker> logger) : BackgroundService
 
         consumer.ReceivedAsync += async (sender, args) =>
         {
-            var message = Encoding.UTF8.GetString(args.Body.ToArray());
-            var order = JsonSerializer.Deserialize<Contracts.OrderCreated>(message);
+            try
+            {
+                var message = Encoding.UTF8.GetString(args.Body.ToArray());
+                var order = JsonSerializer.Deserialize<Contracts.OrderCreated>(message);
 
-            logger.LogInformation("Received order: {OrderId}, Product: {ProductId}, Quantity: {Quantity}, TotalPrice: {TotalPrice}",
-                order?.OrderId, order?.ProductId, order?.Quantity, order?.TotalPrice);
+                logger.LogInformation("Processing order: {OrderId}, Product: {ProductId}, Quantity: {Quantity}, TotalPrice: {TotalPrice}",
+                    order?.OrderId, order?.ProductId, order?.Quantity, order?.TotalPrice);
 
-            await Task.CompletedTask;
+                await Task.Delay(1000, cancellationToken); // Simulate processing time
+
+                await channel.BasicAckAsync(args.DeliveryTag, multiple: false, cancellationToken: cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error processing order: {Message}, requeing...", args.Body.ToString());
+                await channel.BasicNackAsync(args.DeliveryTag, multiple: false, requeue: true, cancellationToken: cancellationToken);
+            }
         };
 
         await channel.BasicConsumeAsync(
             queue: "orders",
-            autoAck: true,
+            autoAck: false,
             consumer: consumer,
             cancellationToken: cancellationToken);
 
