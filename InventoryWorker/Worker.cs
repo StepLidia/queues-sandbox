@@ -3,13 +3,13 @@ using System.Text.Json;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 
-namespace PaymentWorker;
+namespace InventoryWorker;
 
 public class Worker(ILogger<Worker> logger) : BackgroundService
 {
     private IConnection? connection;
     private IChannel? channel;
-    private static string QueueName => "orders-payment";
+    private static string QueueName => "orders-inventory";
     private static string ExchangeName => "orders-exchange";
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
@@ -48,8 +48,8 @@ public class Worker(ILogger<Worker> logger) : BackgroundService
                 var message = Encoding.UTF8.GetString(args.Body.ToArray());
                 var order = JsonSerializer.Deserialize<Contracts.OrderCreated>(message);
 
-                logger.LogInformation("Processing order: {OrderId}, Product: {ProductId}, Quantity: {Quantity}, TotalPrice: {TotalPrice}",
-                    order?.OrderId, order?.ProductId, order?.Quantity, order?.TotalPrice);
+                logger.LogInformation("Reserving Quantity: {Quantity} of Product: {ProductId} for Order: {OrderId} with TotalPrice: {TotalPrice}",
+                    order?.Quantity, order?.ProductId, order?.OrderId, order?.TotalPrice);
 
                 await Task.Delay(1000, cancellationToken); // Simulate processing time
 
@@ -57,11 +57,11 @@ public class Worker(ILogger<Worker> logger) : BackgroundService
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Error processing order: {Message}, requeing...", args.Body.ToString());
+                logger.LogError(ex, "Error reserving inventory: {Message}, requeing...", args.Body.ToString());
                 await channel.BasicNackAsync(args.DeliveryTag, multiple: false, requeue: true, cancellationToken: cancellationToken);
             }
         };
-
+    
         await channel.BasicConsumeAsync(
             queue: QueueName,
             autoAck: false,
@@ -87,3 +87,4 @@ public class Worker(ILogger<Worker> logger) : BackgroundService
         await base.StopAsync(cancellationToken);
     }
 }
+

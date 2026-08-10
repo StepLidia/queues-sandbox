@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="Contracts/Contracts.csproj" />
+  <Project Path="InventoryWorker/InventoryWorker.csproj" />
   <Project Path="OrderApi/OrderApi.csproj" />
   <Project Path="PaymentWorker/PaymentWorker.csproj" />
 </Solution>
