@@ -1,16 +1,64 @@
+using System.Text;
+using System.Text.Json;
+using RabbitMQ.Client;
+using RabbitMQ.Client.Events;
+
 namespace PaymentWorker;
 
 public class Worker(ILogger<Worker> logger) : BackgroundService
 {
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    private IConnection? connection;
+    private IChannel? channel;
+
+    protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
-        while (!stoppingToken.IsCancellationRequested)
+        var factory = new ConnectionFactory { HostName = "localhost" };
+
+        this.connection = await factory.CreateConnectionAsync(cancellationToken);
+        this.channel = await this.connection.CreateChannelAsync(cancellationToken: cancellationToken);
+
+        await channel.QueueDeclareAsync(
+            queue: "orders",
+            durable: true,
+            exclusive: false,
+            autoDelete: false,
+            cancellationToken: cancellationToken);
+
+        var consumer = new AsyncEventingBasicConsumer(channel);
+
+        consumer.ReceivedAsync += async (sender, args) =>
         {
-            if (logger.IsEnabled(LogLevel.Information))
-            {
-                logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
-            }
-            await Task.Delay(1000, stoppingToken);
+            var message = Encoding.UTF8.GetString(args.Body.ToArray());
+            var order = JsonSerializer.Deserialize<Contracts.OrderCreated>(message);
+
+            logger.LogInformation("Received order: {OrderId}, Product: {ProductId}, Quantity: {Quantity}, TotalPrice: {TotalPrice}",
+                order?.OrderId, order?.ProductId, order?.Quantity, order?.TotalPrice);
+
+            await Task.CompletedTask;
+        };
+
+        await channel.BasicConsumeAsync(
+            queue: "orders",
+            autoAck: true,
+            consumer: consumer,
+            cancellationToken: cancellationToken);
+
+        // Keep the service running until cancellation is requested
+        await Task.Delay(Timeout.Infinite, cancellationToken);
+    }
+
+    public override async Task StopAsync(CancellationToken cancellationToken)
+    {
+        if (this.channel is not null)
+        {
+            await this.channel.DisposeAsync();
         }
+
+        if (this.connection is not null)
+        {
+            await this.connection.DisposeAsync();
+        }
+
+        await base.StopAsync(cancellationToken);
     }
 }

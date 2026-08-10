@@ -9,3 +9,5 @@ A small project for a basic set-up and learning of modern queue technologies lik
 - RabbitMQ
 - ActiveMQ
 - Kafka
+
+![RabbitMQ](Misc/rabbitmq.png)
