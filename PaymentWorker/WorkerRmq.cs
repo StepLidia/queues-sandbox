@@ -5,7 +5,7 @@ using RabbitMQ.Client.Events;
 
 namespace PaymentWorker;
 
-public class Worker(ILogger<Worker> logger) : BackgroundService
+public class WorkerRmq(ILogger<WorkerRmq> logger) : BackgroundService
 {
     private IConnection? connection;
     private IChannel? channel;

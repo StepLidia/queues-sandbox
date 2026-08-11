@@ -4,7 +4,7 @@ using RabbitMQ.Client;
 
 namespace OrderApi;
 
-public class Producer : IAsyncDisposable
+public class ProducerRmq : IAsyncDisposable
 {
     private readonly IConnection connection;
 
@@ -12,13 +12,13 @@ public class Producer : IAsyncDisposable
 
     //private static string QueueName => "orders";
 
-    private Producer(IConnection connection, IChannel channel)
+    private ProducerRmq(IConnection connection, IChannel channel)
     {
         this.connection = connection;
         this.channel = channel;
     }
 
-    public static async Task<Producer> CreateAsync()
+    public static async Task<ProducerRmq> CreateAsync()
     {
         var factory = new ConnectionFactory
         {
@@ -35,7 +35,7 @@ public class Producer : IAsyncDisposable
         //await channel.QueueDeclareAsync(queue: QueueName, durable: true, exclusive: false, autoDelete: false);
         await channel.ExchangeDeclareAsync(exchange: RabbitMqTopology.OrdersExchange, type: ExchangeType.Fanout, durable: true, autoDelete: false);
 
-        return new Producer(connection, channel);
+        return new ProducerRmq(connection, channel);
     }
 
     public async Task PublishAsync(OrderCreated order)

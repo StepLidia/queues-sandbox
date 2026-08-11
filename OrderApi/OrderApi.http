@@ -9,3 +9,15 @@ Content-Type: application/json
   "quantity": 15,
   "totalPrice": 12.99
 }
+
+###
+
+POST {{OrderApi_HostAddress}}/orders-amq
+Content-Type: application/json
+
+{
+  "orderId": "c56b13b6-c6a9-4bbb-aa27-22981fcc4251",
+  "productId": "876863",
+  "quantity": 3,
+  "totalPrice": 55.33
+}
