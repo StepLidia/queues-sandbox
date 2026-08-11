@@ -55,7 +55,7 @@ public class Worker(ILogger<Worker> logger) : BackgroundService
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Error reserving inventory: {Message}, requeing...", args.Body.ToString());
+                logger.LogError(ex, "Error reserving inventory. DeliveryTag: {DeliveryTag}, requeing...", args.DeliveryTag);
                 await channel.BasicNackAsync(args.DeliveryTag, multiple: false, requeue: true, cancellationToken: cancellationToken);
             }
         };

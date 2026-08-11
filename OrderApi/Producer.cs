@@ -22,7 +22,9 @@ public class Producer : IAsyncDisposable
     {
         var factory = new ConnectionFactory { HostName = "localhost" };
         var connection = await factory.CreateConnectionAsync();
-        var channel = await connection.CreateChannelAsync();
+
+        var options = new CreateChannelOptions(publisherConfirmationsEnabled: true, publisherConfirmationTrackingEnabled: true);
+        var channel = await connection.CreateChannelAsync(options);
 
         //await channel.QueueDeclareAsync(queue: QueueName, durable: true, exclusive: false, autoDelete: false);
         await channel.ExchangeDeclareAsync(exchange: RabbitMqTopology.OrdersExchange, type: ExchangeType.Fanout, durable: true, autoDelete: false);
@@ -34,8 +36,14 @@ public class Producer : IAsyncDisposable
     {
         var body = JsonSerializer.SerializeToUtf8Bytes(order);
 
+        var properties = new BasicProperties
+        {
+            MessageId = Guid.NewGuid().ToString(),
+            Persistent = true, // message will survive broker restarts
+        };
+
         //await this.channel.BasicPublishAsync(exchange: string.Empty, routingKey: QueueName, body: body);
-        await this.channel.BasicPublishAsync(exchange: RabbitMqTopology.OrdersExchange, routingKey: string.Empty, body: body);
+        await this.channel.BasicPublishAsync(exchange: RabbitMqTopology.OrdersExchange, routingKey: string.Empty, mandatory: false, basicProperties: properties, body: body);
     }
 
     public async ValueTask DisposeAsync()
