@@ -9,8 +9,6 @@ public class Worker(ILogger<Worker> logger) : BackgroundService
 {
     private IConnection? connection;
     private IChannel? channel;
-    private static string QueueName => "orders-inventory";
-    private static string ExchangeName => "orders-exchange";
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
@@ -20,22 +18,22 @@ public class Worker(ILogger<Worker> logger) : BackgroundService
         this.channel = await this.connection.CreateChannelAsync(cancellationToken: cancellationToken);
 
         await this.channel.ExchangeDeclareAsync(
-            exchange: ExchangeName,
+            exchange: RabbitMqTopology.OrdersExchange,
             type: ExchangeType.Fanout,
             durable: true,
             autoDelete: false,
             cancellationToken: cancellationToken);
 
         await channel.QueueDeclareAsync(
-            queue: QueueName,
+            queue: RabbitMqTopology.InventoryQueue,
             durable: true,
             exclusive: false,
             autoDelete: false,
             cancellationToken: cancellationToken);
 
         await channel.QueueBindAsync(
-            queue: QueueName,
-            exchange: ExchangeName,
+            queue: RabbitMqTopology.InventoryQueue,
+            exchange: RabbitMqTopology.OrdersExchange,
             routingKey: string.Empty,
             cancellationToken: cancellationToken);
 
@@ -63,7 +61,7 @@ public class Worker(ILogger<Worker> logger) : BackgroundService
         };
 
         await channel.BasicConsumeAsync(
-            queue: QueueName,
+            queue: RabbitMqTopology.InventoryQueue,
             autoAck: false,
             consumer: consumer,
             cancellationToken: cancellationToken);

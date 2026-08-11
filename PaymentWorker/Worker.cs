@@ -9,14 +9,6 @@ public class Worker(ILogger<Worker> logger) : BackgroundService
 {
     private IConnection? connection;
     private IChannel? channel;
-    private static string QueueName => "orders-payment";
-    private static string ExchangeName => "orders-exchange";
-
-    private static string DeadLetterExchangeName => "orders-dead-letter-exchange";
-
-    private static string DeadLetterQueueName => "orders-dead-letter-queue";
-
-    private static string DeadLetterRoutingKey => "payment-dead";
 
     protected override async Task ExecuteAsync(CancellationToken cancellationToken)
     {
@@ -30,19 +22,19 @@ public class Worker(ILogger<Worker> logger) : BackgroundService
         var arguments = new Dictionary<string, object?>
         {
             ["x-queue-type"] = "quorum",
-            ["x-dead-letter-exchange"] = DeadLetterExchangeName,
-            ["x-dead-letter-routing-key"] = DeadLetterRoutingKey
+            ["x-dead-letter-exchange"] = RabbitMqTopology.DeadLetterExchangeName,
+            ["x-dead-letter-routing-key"] = RabbitMqTopology.DeadLetterRoutingKey
         };
 
         await this.channel.ExchangeDeclareAsync(
-            exchange: ExchangeName,
+            exchange: RabbitMqTopology.OrdersExchange,
             type: ExchangeType.Fanout,
             durable: true,
             autoDelete: false,
             cancellationToken: cancellationToken);
 
         await channel.QueueDeclareAsync(
-            queue: QueueName,
+            queue: RabbitMqTopology.PaymentQueue,
             durable: true,
             exclusive: false,
             autoDelete: false,
@@ -50,8 +42,8 @@ public class Worker(ILogger<Worker> logger) : BackgroundService
             cancellationToken: cancellationToken);
 
         await channel.QueueBindAsync(
-            queue: QueueName,
-            exchange: ExchangeName,
+            queue: RabbitMqTopology.PaymentQueue,
+            exchange: RabbitMqTopology.OrdersExchange,
             routingKey: string.Empty,
             cancellationToken: cancellationToken);
 
@@ -82,7 +74,7 @@ public class Worker(ILogger<Worker> logger) : BackgroundService
 
                 await Task.Delay(1000, cancellationToken); // Simulate processing time
 
-                throw new Exception("Simulated payment processing failure"); // Simulate a failure
+                //throw new Exception("Simulated payment processing failure"); // Simulate a failure
                 await channel.BasicAckAsync(args.DeliveryTag, multiple: false, cancellationToken: cancellationToken);
             }
             catch (Exception ex)
@@ -95,7 +87,7 @@ public class Worker(ILogger<Worker> logger) : BackgroundService
         };
 
         await channel.BasicConsumeAsync(
-            queue: QueueName,
+            queue: RabbitMqTopology.PaymentQueue,
             autoAck: false,
             consumer: consumer,
             cancellationToken: cancellationToken);
@@ -122,23 +114,23 @@ public class Worker(ILogger<Worker> logger) : BackgroundService
     private async Task DeclareDeadLetterExchangeAndQueueAsync(IChannel channel, CancellationToken cancellationToken)
     {
         await channel.ExchangeDeclareAsync(
-            exchange: DeadLetterExchangeName,
+            exchange: RabbitMqTopology.DeadLetterExchangeName,
             type: ExchangeType.Direct,
             durable: true,
             autoDelete: false,
             cancellationToken: cancellationToken);
 
         await channel.QueueDeclareAsync(
-            queue: DeadLetterQueueName,
+            queue: RabbitMqTopology.DeadLetterQueueName,
             durable: true,
             exclusive: false,
             autoDelete: false,
             cancellationToken: cancellationToken);
 
         await channel.QueueBindAsync(
-            queue: DeadLetterQueueName,
-            exchange: DeadLetterExchangeName,
-            routingKey: DeadLetterRoutingKey,
+            queue: RabbitMqTopology.DeadLetterQueueName,
+            exchange: RabbitMqTopology.DeadLetterExchangeName,
+            routingKey: RabbitMqTopology.DeadLetterRoutingKey,
             cancellationToken: cancellationToken);
     }
 }

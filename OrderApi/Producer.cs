@@ -12,8 +12,6 @@ public class Producer : IAsyncDisposable
 
     //private static string QueueName => "orders";
 
-    private static string ExchangeName => "orders-exchange";
-
     private Producer(IConnection connection, IChannel channel)
     {
         this.connection = connection;
@@ -27,7 +25,7 @@ public class Producer : IAsyncDisposable
         var channel = await connection.CreateChannelAsync();
 
         //await channel.QueueDeclareAsync(queue: QueueName, durable: true, exclusive: false, autoDelete: false);
-        await channel.ExchangeDeclareAsync(exchange: ExchangeName, type: ExchangeType.Fanout, durable: true, autoDelete: false);
+        await channel.ExchangeDeclareAsync(exchange: RabbitMqTopology.OrdersExchange, type: ExchangeType.Fanout, durable: true, autoDelete: false);
 
         return new Producer(connection, channel);
     }
@@ -37,7 +35,7 @@ public class Producer : IAsyncDisposable
         var body = JsonSerializer.SerializeToUtf8Bytes(order);
 
         //await this.channel.BasicPublishAsync(exchange: string.Empty, routingKey: QueueName, body: body);
-        await this.channel.BasicPublishAsync(exchange: ExchangeName, routingKey: string.Empty, body: body);
+        await this.channel.BasicPublishAsync(exchange: RabbitMqTopology.OrdersExchange, routingKey: string.Empty, body: body);
     }
 
     public async ValueTask DisposeAsync()
