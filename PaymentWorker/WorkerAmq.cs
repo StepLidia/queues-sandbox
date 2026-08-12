@@ -1,32 +1,44 @@
-using System.Text;
-using System.Text.Json;
-using RabbitMQ.Client;
-using RabbitMQ.Client.Events;
+using Apache.NMS;
+using Apache.NMS.AMQP;
 
 namespace PaymentWorker;
 
 public class WorkerAmq(ILogger<WorkerRmq> logger) : BackgroundService
 {
     private IConnection? connection;
-    private IChannel? channel;
+    private ISession? session;
+    private IMessageConsumer? messageConsumer;
 
-    protected override async Task ExecuteAsync(CancellationToken cancellationToken)
+    protected override Task ExecuteAsync(CancellationToken cancellationToken)
     {
+        var factory = new ConnectionFactory("amqp://localhost:61616");
 
+        this.connection = factory.CreateConnection("artemis", "artemis");
+        this.connection.Start();
+
+        this.session = this.connection.CreateSession(AcknowledgementMode.ClientAcknowledge);
+
+        var queue = this.session.GetQueue(ActiveMqTopology.OrdersQueue);
+
+        this.messageConsumer = this.session.CreateConsumer(queue);
+        this.messageConsumer.Listener += message =>
+        {
+            if (message is ITextMessage textMessage)
+            {
+                logger.LogInformation("Received order: {Order}", textMessage.Text);
+                textMessage.Acknowledge();
+            }
+        };
+
+        return Task.CompletedTask;
     }
 
-    public override async Task StopAsync(CancellationToken cancellationToken)
+    public override Task StopAsync(CancellationToken cancellationToken)
     {
-        if (this.channel is not null)
-        {
-            await this.channel.DisposeAsync();
-        }
+        this.messageConsumer?.Dispose();
+        this.session?.Dispose();
+        this.connection?.Dispose();
 
-        if (this.connection is not null)
-        {
-            await this.connection.DisposeAsync();
-        }
-
-        await base.StopAsync(cancellationToken);
+        return base.StopAsync(cancellationToken);
     }
 }
